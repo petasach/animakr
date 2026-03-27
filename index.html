@@ -3,53 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <title>Image Sequence → GIF</title>
+
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gif.js.optimized/dist/gif.js"></script>
 
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-        background: #f5f5f5;
-    }
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #f5f5f5;
+}
 
-    h1 {
-        margin-bottom: 10px;
-    }
+h1 {
+    margin-bottom: 10px;
+}
 
-    #preview {
-        display: flex;
-        overflow-x: auto;
-        gap: 10px;
-        padding: 10px;
-        background: white;
-        border: 1px solid #ddd;
-        margin-top: 15px;
-    }
+#topbar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
 
-    .thumb {
-        height: 100px;
-        cursor: grab;
-    }
+#trash {
+    font-size: 28px;
+    cursor: pointer;
+    background: white;
+    border: 2px dashed #ccc;
+    padding: 10px 15px;
+    border-radius: 10px;
+    transition: 0.2s;
+}
 
-    .controls {
-        margin-top: 20px;
-    }
+#trash.active {
+    background: #ffdddd;
+    border-color: red;
+}
 
-    input {
-        padding: 5px;
-        width: 80px;
-    }
+#preview {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    margin-top: 15px;
+}
 
-    button {
-        padding: 10px 15px;
-        margin-top: 15px;
-        cursor: pointer;
-    }
+.thumb {
+    height: 100px;
+    cursor: grab;
+}
 
-    #status {
-        margin-top: 10px;
-    }
+.controls {
+    margin-top: 20px;
+}
+
+input {
+    padding: 5px;
+    width: 80px;
+}
+
+button {
+    padding: 10px 15px;
+    margin-top: 15px;
+    cursor: pointer;
+}
+
+#status {
+    margin-top: 10px;
+}
 </style>
 </head>
 
@@ -57,7 +79,10 @@
 
 <h1>Image Sequence → GIF</h1>
 
-<input type="file" id="upload" multiple accept="image/*">
+<div id="topbar">
+    <input type="file" id="upload" multiple accept="image/*">
+    <div id="trash">🗑️</div>
+</div>
 
 <div id="preview"></div>
 
@@ -79,15 +104,14 @@ const preview = document.getElementById("preview");
 const fpsInput = document.getElementById("fps");
 const durationText = document.getElementById("duration");
 const status = document.getElementById("status");
+const trash = document.getElementById("trash");
 
 upload.addEventListener("change", (e) => {
     const files = Array.from(e.target.files);
 
-    // sort by name
     files.sort((a, b) => a.name.localeCompare(b.name));
 
     images = [];
-
     preview.innerHTML = "";
 
     files.forEach(file => {
@@ -102,7 +126,7 @@ upload.addEventListener("change", (e) => {
     updateDuration();
 });
 
-// drag & drop sorting
+// SORTABLE (drag reorder)
 new Sortable(preview, {
     animation: 150,
     onEnd: () => {
@@ -111,6 +135,7 @@ new Sortable(preview, {
     }
 });
 
+// FPS
 fpsInput.addEventListener("input", updateDuration);
 
 function updateDuration() {
@@ -119,6 +144,55 @@ function updateDuration() {
     durationText.textContent = ` | Duration: ${duration.toFixed(2)}s`;
 }
 
+// 🗑️ CLICK → DELETE ALL
+trash.addEventListener("click", () => {
+    if (images.length === 0) return;
+
+    if (confirm("Delete all images?")) {
+        preview.innerHTML = "";
+        images = [];
+        updateDuration();
+    }
+});
+
+// 🗑️ DRAG TO DELETE
+preview.addEventListener("dragstart", (e) => {
+    if (e.target.classList.contains("thumb")) {
+        e.dataTransfer.setData("text/plain", "image");
+        e.target.classList.add("dragging");
+    }
+});
+
+preview.addEventListener("dragend", (e) => {
+    if (e.target.classList.contains("thumb")) {
+        e.target.classList.remove("dragging");
+        trash.classList.remove("active");
+    }
+});
+
+trash.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    trash.classList.add("active");
+});
+
+trash.addEventListener("dragleave", () => {
+    trash.classList.remove("active");
+});
+
+trash.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const dragging = document.querySelector(".dragging");
+
+    if (dragging) {
+        dragging.remove();
+        images = Array.from(preview.children);
+        updateDuration();
+    }
+
+    trash.classList.remove("active");
+});
+
+// EXPORT
 document.getElementById("export").addEventListener("click", () => {
     if (images.length === 0) {
         alert("Upload images first");
@@ -128,7 +202,7 @@ document.getElementById("export").addEventListener("click", () => {
     const fps = parseFloat(fpsInput.value) || 1;
     const delay = 1000 / fps;
 
-    status.textContent = "Rendering GIF... (this may take a while)";
+    status.textContent = "Rendering GIF...";
 
     const gif = new GIF({
         workers: 2,
